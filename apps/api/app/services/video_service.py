@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import subprocess
 
 import cv2
 
@@ -17,6 +19,48 @@ class VideoService:
         self.detector = detector or DetectorService()
         self.censor = censor or CensorService()
 
+    def _find_ffmpeg(self) -> Path | None:
+        ffmpeg_path = shutil.which("ffmpeg")
+        if ffmpeg_path is not None:
+            return Path(ffmpeg_path)
+        return None
+
+    def _merge_audio(self, source_video: Path, processed_video: Path, output_path: Path) -> None:
+        ffmpeg_path = self._find_ffmpeg()
+        if ffmpeg_path is None:
+            raise ProcessingError(
+                "FFmpeg is required to preserve audio when processing video. "
+                "Install FFmpeg and make sure it is available on PATH."
+            )
+
+        command = [
+            str(ffmpeg_path),
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(processed_video),
+            "-i",
+            str(source_video),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a?",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            str(output_path),
+        ]
+
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise ProcessingError(
+                "Failed to preserve audio while processing video: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+
     def process_video(self, input_path: Path, output_path: Path, options: ProcessingOptions) -> Path:
         capture = cv2.VideoCapture(str(input_path))
         if not capture.isOpened():
@@ -30,8 +74,9 @@ class VideoService:
             capture.release()
             raise ProcessingError("Could not determine the video dimensions.")
 
+        temp_video_path = output_path.with_suffix(".tmp.mp4")
         writer = cv2.VideoWriter(
-            str(output_path),
+            str(temp_video_path),
             cv2.VideoWriter_fourcc(*"mp4v"),
             fps,
             (width, height),
@@ -41,9 +86,6 @@ class VideoService:
             capture.release()
             raise ProcessingError("Could not open the output video writer.")
 
-        # Detecting every frame is the main cost for long videos.
-        # Reuse the last detection result for a few frames to keep output quality
-        # acceptable while cutting the processing time substantially.
         detect_every = 4
         cached_faces: list[tuple[int, int, int, int]] = []
 
@@ -65,5 +107,11 @@ class VideoService:
         finally:
             capture.release()
             writer.release()
+
+        try:
+            self._merge_audio(input_path, temp_video_path, output_path)
+        finally:
+            if temp_video_path.exists():
+                temp_video_path.unlink()
 
         return output_path
