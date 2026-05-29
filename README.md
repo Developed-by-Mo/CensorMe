@@ -54,8 +54,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 ## Run the Frontend
-`
-1. Open `apps/web.
+
+1. Open `apps/web`.
 2. Install dependencies with npm, pnpm, or yarn.
 3. Start the Next.js dev server.
 
