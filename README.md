@@ -79,7 +79,6 @@ Set `NEXT_PUBLIC_API_URL` if your API is not running at `http://localhost:8000/a
 
 ## Future Improvements
 
-- Add batch processing for multiple uploads
-- Add streaming progress for large videos
-- Add model selection and detector tuning in the UI
+- Add the ability to remove boxes from certain faces
+- Add the ability to interact with the detector and preview the intensity
 - Add test coverage for service boundaries and API routes

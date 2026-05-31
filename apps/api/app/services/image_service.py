@@ -14,7 +14,7 @@ from app.services.detector_service import DetectorService
 
 class ImageService:
     def __init__(self, detector: DetectorService | None = None, censor: CensorService | None = None) -> None:
-        self.detector = detector or DetectorService()
+        self.detector = detector
         self.censor = censor or CensorService()
 
     def process_image(self, input_path: Path, output_path: Path, options: ProcessingOptions) -> Path:
@@ -22,8 +22,10 @@ class ImageService:
         if frame is None:
             raise ProcessingError("Could not read the uploaded image.")
 
-        self.detector.set_filter_mode(options.filter_mode.value)
-        faces = self.detector.detect(frame)
+        detector = self.detector or DetectorService()
+        detector.configure(options)
+
+        faces = detector.detect(frame)
         processed = self.censor.apply(frame, faces, options.mode, options.intensity)
 
         if not cv2.imwrite(str(output_path), processed):

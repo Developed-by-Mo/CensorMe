@@ -1,5 +1,5 @@
+import type { BatchResponse, MediaJobResponse } from "./job-types";
 import type { MediaKind, ProcessedMediaResult, ProcessingRequest } from "./types";
-import type { MediaJobResponse } from "./job-types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
@@ -57,6 +57,19 @@ async function getJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+function appendRequestOptions(formData: FormData, request: ProcessingRequest): void {
+  formData.append("mode", request.mode);
+  formData.append("intensity", String(request.intensity));
+  formData.append("filter_mode", request.filterMode);
+  formData.append("detector_model", request.detectorModel);
+  formData.append("score_threshold", String(request.scoreThreshold));
+  formData.append("nms_threshold", String(request.nmsThreshold));
+  formData.append("top_k", String(request.topK));
+  formData.append("detect_every", String(request.detectEvery));
+  formData.append("use_landmark_filter", String(request.useLandmarkFilter));
+  formData.append("min_face_pixels", String(request.minFacePixels));
+}
+
 async function pollMediaJob(jobId: string): Promise<MediaJobResponse> {
   const response = await fetch(`${API_BASE_URL}/media/jobs/${jobId}`);
   if (!response.ok) {
@@ -85,9 +98,9 @@ async function waitForVideoJob(jobId: string): Promise<MediaJobResponse> {
   }
 }
 
-async function downloadVideoResult(job: MediaJobResponse): Promise<ProcessedMediaResult> {
+export async function downloadMediaJob(job: MediaJobResponse): Promise<ProcessedMediaResult> {
   if (!job.downloadUrl) {
-    throw new Error("Video job did not return a download URL.");
+    throw new Error("Media job did not return a download URL.");
   }
 
   const downloadPath = job.downloadUrl.startsWith("/") ? job.downloadUrl : `/${job.downloadUrl}`;
@@ -99,7 +112,7 @@ async function downloadVideoResult(job: MediaJobResponse): Promise<ProcessedMedi
   const blob = await response.blob();
   return {
     blob,
-    filename: extractFilename(response, "processed-video.mp4"),
+    filename: extractFilename(response, job.filename ?? "processed-media"),
   };
 }
 
@@ -109,9 +122,7 @@ export async function processMediaFile(file: File, request: ProcessingRequest): 
   const formData = new FormData();
 
   formData.append("file", file);
-  formData.append("mode", request.mode);
-  formData.append("intensity", String(request.intensity));
-  formData.append("filter_mode", request.filterMode);
+  appendRequestOptions(formData, request);
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -130,11 +141,58 @@ export async function processMediaFile(file: File, request: ProcessingRequest): 
       throw new Error(completedJob.error || "Video processing failed.");
     }
 
-    return downloadVideoResult(completedJob);
+    return downloadMediaJob(completedJob);
   }
 
   const blob = await response.blob();
   const filename = extractFilename(response, `processed-${file.name}`);
 
   return { blob, filename };
+}
+
+export async function submitMediaBatch(files: File[], request: ProcessingRequest): Promise<BatchResponse> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+  appendRequestOptions(formData, request);
+
+  const response = await fetch(`${API_BASE_URL}/media/batch`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return getJson<BatchResponse>(response);
+}
+
+export function subscribeToMediaJob(
+  job: MediaJobResponse,
+  onUpdate: (job: MediaJobResponse) => void,
+  onError: (error: Error) => void,
+): () => void {
+  if (!job.eventsUrl) {
+    onError(new Error("Media job did not return a progress stream URL."));
+    return () => undefined;
+  }
+
+  const eventsPath = job.eventsUrl.startsWith("/") ? job.eventsUrl : `/${job.eventsUrl}`;
+  const source = new EventSource(`${API_BASE_URL}${eventsPath}`);
+
+  source.onmessage = (event) => {
+    const nextJob = JSON.parse(event.data) as MediaJobResponse;
+    onUpdate(nextJob);
+
+    if (nextJob.status === "completed" || nextJob.status === "failed") {
+      source.close();
+    }
+  };
+
+  source.onerror = () => {
+    source.close();
+    onError(new Error("Lost connection to the progress stream."));
+  };
+
+  return () => source.close();
 }

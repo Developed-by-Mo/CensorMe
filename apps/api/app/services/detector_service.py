@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from app.core.config import get_settings
+from app.schemas.media import DetectorModel, ProcessingOptions
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class DetectorService:
         self.yunet_top_k = 5000
 
         self.filter_mode = "balanced"
+        self.detector_model = DetectorModel.auto.value
         self.use_landmark_filter = True
         self.min_face_pixels = 14
         self.min_face_area_ratio = 0.00008
@@ -77,6 +79,27 @@ class DetectorService:
             self.min_aspect_ratio = 0.45
             self.max_aspect_ratio = 1.95
             self.use_landmark_filter = True
+
+    def configure(self, options: ProcessingOptions) -> None:
+        """Apply detector options for one processing request.
+
+        A new DetectorService should be used per request or per job so these
+        stateful settings do not leak between concurrent uploads.
+        """
+        self.set_filter_mode(options.filter_mode.value)
+        self.detector_model = options.detector_model.value
+
+        if options.score_threshold is not None:
+            self.yunet_score_threshold = options.score_threshold
+            self.yunet_internal_score_threshold = min(self.yunet_internal_score_threshold, options.score_threshold)
+        if options.nms_threshold is not None:
+            self.yunet_nms_threshold = options.nms_threshold
+        if options.top_k is not None:
+            self.yunet_top_k = options.top_k
+        if options.use_landmark_filter is not None:
+            self.use_landmark_filter = options.use_landmark_filter
+        if options.min_face_pixels is not None:
+            self.min_face_pixels = options.min_face_pixels
 
     def _score_threshold_for_scale(self, actual_scale: float) -> float:
         extra = 0.0
@@ -156,6 +179,9 @@ class DetectorService:
             self.use_yunet = False
 
     def detect(self, frame: np.ndarray) -> list[FaceBox]:
+        if self.detector_model == DetectorModel.haar.value:
+            return self._remove_duplicate_boxes(self._detect_haar(frame))
+
         self._load_yunet(frame)
 
         if self.use_yunet and self.yunet_detector is not None:
@@ -163,6 +189,9 @@ class DetectorService:
             for scale in self.scales:
                 faces.extend(self._detect_yunet_scaled(frame, scale))
             return self._remove_duplicate_boxes(faces)
+
+        if self.detector_model == DetectorModel.yunet.value:
+            return []
 
         if self.use_haar_fallback:
             return self._remove_duplicate_boxes(self._detect_haar(frame))
