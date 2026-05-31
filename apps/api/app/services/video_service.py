@@ -29,7 +29,7 @@ class VideoService:
             return Path(ffmpeg_path)
 
         bundled_path = Path(imageio_ffmpeg.get_ffmpeg_exe())
-        if bundled_path.exists():
+        if bundled_path.is_file():
             return bundled_path
 
         return None
