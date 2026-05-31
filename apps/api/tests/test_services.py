@@ -80,3 +80,21 @@ def test_video_service_uses_bundled_ffmpeg_when_path_missing(monkeypatch, tmp_pa
     service = VideoService()
 
     assert service._find_ffmpeg() == bundled_ffmpeg
+
+
+def test_video_service_prefers_system_ffmpeg_over_bundled(monkeypatch, tmp_path: Path):
+    system_ffmpeg = tmp_path / "ffmpeg"
+    system_ffmpeg.write_bytes(b"")
+
+    bundled_ffmpeg = tmp_path / "ffmpeg.exe"
+    bundled_ffmpeg.write_bytes(b"")
+
+    monkeypatch.setattr("app.services.video_service.shutil.which", lambda _: str(system_ffmpeg))
+    monkeypatch.setattr(
+        "app.services.video_service.imageio_ffmpeg.get_ffmpeg_exe",
+        lambda: str(bundled_ffmpeg),
+    )
+
+    service = VideoService()
+
+    assert service._find_ffmpeg() == system_ffmpeg
