@@ -4,6 +4,7 @@ import numpy as np
 
 from app.schemas.media import CensorMode, DetectorModel, FilterMode, ProcessingOptions
 from app.services.censor_service import CensorService
+from app.services.video_service import VideoService
 from app.services.job_service import JobService
 
 
@@ -64,3 +65,36 @@ def test_processing_options_accept_detector_tuning():
     assert options.detector_model == DetectorModel.yunet
     assert options.score_threshold == 0.62
     assert options.detect_every == 2
+
+
+def test_video_service_uses_bundled_ffmpeg_when_path_missing(monkeypatch, tmp_path: Path):
+    bundled_ffmpeg = tmp_path / "ffmpeg.exe"
+    bundled_ffmpeg.write_bytes(b"")
+
+    monkeypatch.setattr("app.services.video_service.shutil.which", lambda _: None)
+    monkeypatch.setattr(
+        "app.services.video_service.imageio_ffmpeg.get_ffmpeg_exe",
+        lambda: str(bundled_ffmpeg),
+    )
+
+    service = VideoService()
+
+    assert service._find_ffmpeg() == bundled_ffmpeg
+
+
+def test_video_service_prefers_system_ffmpeg_over_bundled(monkeypatch, tmp_path: Path):
+    system_ffmpeg = tmp_path / "ffmpeg"
+    system_ffmpeg.write_bytes(b"")
+
+    bundled_ffmpeg = tmp_path / "ffmpeg.exe"
+    bundled_ffmpeg.write_bytes(b"")
+
+    monkeypatch.setattr("app.services.video_service.shutil.which", lambda _: str(system_ffmpeg))
+    monkeypatch.setattr(
+        "app.services.video_service.imageio_ffmpeg.get_ffmpeg_exe",
+        lambda: str(bundled_ffmpeg),
+    )
+
+    service = VideoService()
+
+    assert service._find_ffmpeg() == system_ffmpeg

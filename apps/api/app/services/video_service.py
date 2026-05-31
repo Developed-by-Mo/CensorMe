@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 import cv2
+import imageio_ffmpeg
 
 from app.core.errors import ProcessingError
 from app.schemas.media import ProcessingOptions
@@ -26,6 +27,11 @@ class VideoService:
         ffmpeg_path = shutil.which("ffmpeg")
         if ffmpeg_path is not None:
             return Path(ffmpeg_path)
+
+        bundled_path = Path(imageio_ffmpeg.get_ffmpeg_exe())
+        if bundled_path.is_file():
+            return bundled_path
+
         return None
 
     def _merge_audio(self, source_video: Path, processed_video: Path, output_path: Path) -> None:
@@ -33,7 +39,7 @@ class VideoService:
         if ffmpeg_path is None:
             raise ProcessingError(
                 "FFmpeg is required to preserve audio when processing video. "
-                "Install FFmpeg and make sure it is available on PATH."
+                "Install FFmpeg or the imageio-ffmpeg package so a bundled executable is available."
             )
 
         command = [
