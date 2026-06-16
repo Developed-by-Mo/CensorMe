@@ -11,19 +11,10 @@ import { PreviewPanel } from "@/components/preview-panel";
 import { UploadPanel } from "@/components/upload-panel";
 
 function detectKind(file: File | null): MediaKind | null {
-  if (!file) {
-    return null;
-  }
-
-  if (file.type.startsWith("video/")) {
-    return "video";
-  }
-
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  if (["mp4", "mov", "avi", "mkv", "webm"].includes(extension)) {
-    return "video";
-  }
-
+  if (!file) return null;
+  if (file.type.startsWith("video/")) return "video";
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "video";
   return "image";
 }
 
@@ -73,11 +64,9 @@ export default function HomePage() {
       setPreviewKind(null);
       return;
     }
-
     const nextUrl = URL.createObjectURL(firstFile);
     setOriginalUrl(nextUrl);
     setPreviewKind(detectKind(firstFile));
-
     return () => URL.revokeObjectURL(nextUrl);
   }, [firstFile]);
 
@@ -99,13 +88,14 @@ export default function HomePage() {
   };
 
   const updateResult = (jobId: string, patch: Partial<BatchResultItem>) => {
-    setResults((current) => current.map((result) => (result.jobId === jobId ? { ...result, ...patch } : result)));
+    setResults((current) =>
+      current.map((r) => (r.jobId === jobId ? { ...r, ...patch } : r))
+    );
   };
 
   const handleSelectFiles = (nextFiles: File[]) => {
     clearResultUrls();
     previewSetRef.current = false;
-
     setProcessedUrl(null);
     setProcessedName(null);
     setResults([]);
@@ -116,7 +106,6 @@ export default function HomePage() {
   const handleClear = () => {
     clearResultUrls();
     previewSetRef.current = false;
-
     setFiles([]);
     setOriginalUrl(null);
     setProcessedUrl(null);
@@ -151,7 +140,6 @@ export default function HomePage() {
                 url,
                 error: null,
               });
-
               if (!previewSetRef.current) {
                 previewSetRef.current = true;
                 setProcessedUrl(url);
@@ -159,7 +147,8 @@ export default function HomePage() {
                 setPreviewKind(nextJob.mediaKind);
               }
             } catch (downloadError) {
-              const message = downloadError instanceof Error ? downloadError.message : "Download failed.";
+              const message =
+                downloadError instanceof Error ? downloadError.message : "Download failed.";
               updateResult(nextJob.jobId, { status: "failed", error: message });
             }
             resolve();
@@ -173,7 +162,7 @@ export default function HomePage() {
         (streamError) => {
           updateResult(job.jobId, { status: "failed", error: streamError.message });
           resolve();
-        },
+        }
       );
     });
   };
@@ -183,13 +172,11 @@ export default function HomePage() {
       setError("Choose at least one image or video before processing.");
       return;
     }
-
     setProcessing(true);
     setError(null);
     setProcessedUrl(null);
     setProcessedName(null);
     previewSetRef.current = false;
-
     try {
       const batch = await submitMediaBatch(files, {
         mode,
@@ -203,11 +190,11 @@ export default function HomePage() {
         useLandmarkFilter,
         minFacePixels,
       });
-
       setResults(batch.jobs.map(toResultItem));
       await Promise.all(batch.jobs.map(waitForJob));
     } catch (processError) {
-      const message = processError instanceof Error ? processError.message : "Processing failed.";
+      const message =
+        processError instanceof Error ? processError.message : "Processing failed.";
       setError(message);
     } finally {
       setProcessing(false);
@@ -215,10 +202,7 @@ export default function HomePage() {
   };
 
   const handleDownload = () => {
-    if (!processedUrl) {
-      return;
-    }
-
+    if (!processedUrl) return;
     const anchor = document.createElement("a");
     anchor.href = processedUrl;
     anchor.download = processedName ?? "processed-media";
@@ -226,10 +210,7 @@ export default function HomePage() {
   };
 
   const handleDownloadResult = (result: BatchResultItem) => {
-    if (!result.url) {
-      return;
-    }
-
+    if (!result.url) return;
     const anchor = document.createElement("a");
     anchor.href = result.url;
     anchor.download = result.filename ?? "processed-media";
@@ -238,33 +219,36 @@ export default function HomePage() {
 
   return (
     <main className="page-shell">
-      <section className="hero glass">
-        <div>
-          <p className="eyebrow">CensorMe</p>
-          <h1>Protect privacy in media without slowing down the workflow.</h1>
-          <p className="hero-copy">
-            Upload one file or a full batch, tune the detector, stream job progress, preview the output,
-            and download every finished file from a clean web interface.
-          </p>
+      {/* Header */}
+      <header className="site-header">
+        <div className="logo-mark">
+          <div className="logo-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="5" width="14" height="10" rx="2" fill="#040f0c" opacity="0.9"/>
+              <rect x="5" y="2" width="8" height="6" rx="1.5" fill="#040f0c" opacity="0.6"/>
+              <circle cx="9" cy="10" r="2.5" fill="#040f0c"/>
+            </svg>
+          </div>
+          <span className="logo-text">CensorMe</span>
+          <span className="logo-sub">face privacy</span>
         </div>
-
-        <div className="hero-stats">
-          <div className="stat-card">
-            <span>FastAPI backend</span>
-            <strong>Service-based</strong>
-          </div>
-          <div className="stat-card">
-            <span>Processing modes</span>
-            <strong>Blur · Pixelate · Redact</strong>
-          </div>
-          <div className="stat-card">
-            <span>Detection</span>
-            <strong>YuNet · Haar · Auto</strong>
-          </div>
+        <div className="header-badge">
+          <span className="status-dot" />
+          API ready
         </div>
-      </section>
+      </header>
 
-      <section className="workspace-grid">
+      {/* Title */}
+      <div className="page-title-row">
+        <h1 className="page-title">Protect faces, protect privacy.</h1>
+        <p className="page-subtitle">
+          Upload images or videos, choose a censoring mode, and download your anonymised output — no data leaves your workflow.
+        </p>
+      </div>
+
+      {/* Main workspace */}
+      <div className="workspace-grid">
+        {/* Left column: controls */}
         <div className="stack">
           <UploadPanel
             files={files}
@@ -297,15 +281,22 @@ export default function HomePage() {
           />
 
           <section className="glass panel action-panel">
-            <button className="primary-button large" type="button" onClick={handleProcess} disabled={files.length === 0 || processing}>
-              {processing ? "Processing batch..." : "Process media"}
+            {error && <p className="error-banner">{error}</p>}
+            <button
+              className="primary-button large"
+              type="button"
+              onClick={handleProcess}
+              disabled={files.length === 0 || processing}
+            >
+              {processing ? "Processing…" : "Censor faces"}
             </button>
             <p className="helper-text">
-              Settings are sent to the API as multipart form data. Large videos stream progress while they run.
+              Files are sent directly to the local API. Large videos stream their progress as they run.
             </p>
           </section>
         </div>
 
+        {/* Right column: preview + batch */}
         <div className="stack">
           <PreviewPanel
             fileName={firstFile?.name ?? null}
@@ -314,13 +305,13 @@ export default function HomePage() {
             processedUrl={processedUrl}
             processedName={processedName}
             processing={processing && results.length === 0}
-            error={error}
+            error={null}
             onDownload={handleDownload}
           />
 
           <BatchResults results={results} onDownload={handleDownloadResult} />
         </div>
-      </section>
+      </div>
     </main>
   );
 }

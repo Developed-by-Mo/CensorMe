@@ -17,67 +17,79 @@ function MediaPreview({ url, mediaKind, title }: { url: string; mediaKind: Media
   if (mediaKind === "video") {
     return <video src={url} controls playsInline className="preview-media" />;
   }
-
   return <img src={url} alt={title} className="preview-media" />;
 }
 
+function ImagePlaceholder() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect x="3" y="5" width="22" height="18" rx="3" stroke="currentColor" strokeWidth="1.4" fill="none" opacity="0.4"/>
+      <circle cx="10" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.4" opacity="0.4"/>
+      <path d="M3 20l6-5 4 4 3-3 9 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.4"/>
+    </svg>
+  );
+}
+
 export function PreviewPanel({
-  fileName,
-  mediaKind,
-  originalUrl,
-  processedUrl,
-  processedName,
-  processing,
-  error,
-  onDownload,
+  fileName, mediaKind, originalUrl, processedUrl, processedName,
+  processing, error, onDownload,
 }: PreviewPanelProps) {
   return (
-    <section className="preview-grid">
+    <div className="preview-grid">
+      {/* Original */}
       <article className="glass panel preview-card">
         <div className="panel-heading">
-          <p className="eyebrow">03 · Original</p>
-          <h2>{fileName ?? "Waiting for a file"}</h2>
+          <p className="section-label">Original</p>
+          <h2>{fileName ?? "No file selected"}</h2>
         </div>
         <div className="preview-frame">
           {originalUrl ? (
             <MediaPreview url={originalUrl} mediaKind={mediaKind} title="Original file preview" />
           ) : (
             <div className="empty-state">
-              <span>No preview yet</span>
+              <div className="empty-state-icon">
+                <ImagePlaceholder />
+              </div>
+              <span className="empty-state-label">Upload a file to preview</span>
             </div>
           )}
         </div>
       </article>
 
+      {/* Result */}
       <article className="glass panel preview-card">
         <div className="panel-heading row-between">
           <div>
-            <p className="eyebrow">04 · Result</p>
-            <h2>{processing ? "Processing..." : processedName ?? "Ready to process"}</h2>
+            <p className="section-label">Result</p>
+            <h2>{processing ? "Processing…" : processedName ?? "Output"}</h2>
           </div>
-          {processedUrl ? (
+          {processedUrl && (
             <button className="primary-button" type="button" onClick={onDownload}>
               Download
             </button>
-          ) : null}
+          )}
         </div>
 
         <div className="preview-frame">
           {processedUrl ? (
             <MediaPreview url={processedUrl} mediaKind={mediaKind} title="Processed file preview" />
           ) : processing ? (
-            <div className="empty-state">
-              <span>Running CensorMe...</span>
+            <div className="processing-state">
+              <div className="processing-ring" />
+              <span className="processing-label">Censoring faces…</span>
             </div>
           ) : (
             <div className="empty-state">
-              <span>Processed output will appear here</span>
+              <div className="empty-state-icon">
+                <ImagePlaceholder />
+              </div>
+              <span className="empty-state-label">Processed output appears here</span>
             </div>
           )}
         </div>
 
-        {error ? <p className="error-banner">{error}</p> : null}
+        {error && <p className="error-banner">{error}</p>}
       </article>
-    </section>
+    </div>
   );
 }

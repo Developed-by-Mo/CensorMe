@@ -22,53 +22,51 @@ interface BatchResultsProps {
 }
 
 function statusLabel(status: MediaJobStatus): string {
-  if (status === "queued") return "Queued";
-  if (status === "processing") return "Processing";
-  if (status === "completed") return "Completed";
-  return "Failed";
+  if (status === "queued") return "queued";
+  if (status === "processing") return "processing";
+  if (status === "completed") return "done";
+  return "failed";
 }
 
 export function BatchResults({ results, onDownload }: BatchResultsProps) {
-  if (results.length === 0) {
-    return null;
-  }
+  if (results.length === 0) return null;
 
   return (
     <section className="glass panel batch-panel">
       <div className="panel-heading">
-        <p className="eyebrow">05 · Batch jobs</p>
-        <h2>Progress and downloads</h2>
+        <p className="section-label">Batch jobs</p>
+        <h2>Progress &amp; downloads</h2>
       </div>
 
       <div className="batch-list">
         {results.map((result) => (
           <article className="batch-item" key={result.jobId}>
             <div className="batch-item-header">
-              <div>
-                <strong>{result.originalName}</strong>
-                <span>
-                  {result.mediaKind} · {statusLabel(result.status)} · {result.progress}%
+              <div className="batch-item-info">
+                <span className="batch-item-name">{result.originalName}</span>
+                <span className="batch-item-meta">
+                  {result.mediaKind}
+                  {result.totalFrames > 0 && ` · ${result.processedFrames}/${result.totalFrames} frames`}
                 </span>
               </div>
 
-              {result.url ? (
-                <button className="primary-button" type="button" onClick={() => onDownload(result)}>
-                  Download
-                </button>
-              ) : null}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                <span className={`status-badge ${result.status}`}>
+                  {statusLabel(result.status)} {result.progress > 0 && result.status !== "completed" ? `${result.progress}%` : ""}
+                </span>
+                {result.url && (
+                  <button className="primary-button" type="button" onClick={() => onDownload(result)}>
+                    Download
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="progress-track" aria-label={`${result.originalName} progress`}>
               <div className="progress-bar" style={{ width: `${result.progress}%` }} />
             </div>
 
-            {result.totalFrames > 0 ? (
-              <p className="helper-text">
-                {result.processedFrames} / {result.totalFrames} frames
-              </p>
-            ) : null}
-
-            {result.error ? <p className="error-banner">{result.error}</p> : null}
+            {result.error && <p className="error-banner">{result.error}</p>}
           </article>
         ))}
       </div>
