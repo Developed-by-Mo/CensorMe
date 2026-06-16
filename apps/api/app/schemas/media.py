@@ -44,6 +44,22 @@ class ProcessingOptions(BaseModel):
     min_face_pixels: int | None = Field(default=None, ge=4, le=200)
 
 
+class SelectableFace(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int
+    label: str | None = None
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    source_frame_index: int = Field(default=0, alias="sourceFrameIndex")
+    source_x1: int | None = Field(default=None, alias="sourceX1")
+    source_y1: int | None = Field(default=None, alias="sourceY1")
+    source_x2: int | None = Field(default=None, alias="sourceX2")
+    source_y2: int | None = Field(default=None, alias="sourceY2")
+
+
 class JobResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -59,6 +75,14 @@ class JobResponse(BaseModel):
     error: str | None = None
     download_url: str | None = Field(default=None, alias="downloadUrl")
     events_url: str | None = Field(default=None, alias="eventsUrl")
+    review_frame_url: str | None = Field(default=None, alias="reviewFrameUrl")
+    review_detections_url: str | None = Field(default=None, alias="reviewDetectionsUrl")
+    review_width: int = Field(default=0, alias="reviewWidth")
+    review_height: int = Field(default=0, alias="reviewHeight")
+    video_width: int = Field(default=0, alias="videoWidth")
+    video_height: int = Field(default=0, alias="videoHeight")
+    video_fps: float = Field(default=0.0, alias="videoFps")
+    selectable_faces: list[SelectableFace] = Field(default_factory=list, alias="selectableFaces")
 
 
 class BatchResponse(BaseModel):

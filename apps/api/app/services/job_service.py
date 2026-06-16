@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 from typing import Literal
@@ -28,6 +28,14 @@ class MediaJob:
     processed_frames: int = 0
     total_frames: int = 0
     error: str | None = None
+    review_frame_path: Path | None = None
+    review_width: int = 0
+    review_height: int = 0
+    selectable_faces: list[dict[str, int | str]] = field(default_factory=list)
+    review_video_width: int = 0
+    review_video_height: int = 0
+    review_video_fps: float = 0.0
+    review_detections: list[dict[str, object]] = field(default_factory=list)
 
 
 class JobService:
@@ -98,6 +106,33 @@ class JobService:
             if total_frames is not None:
                 job.total_frames = max(0, int(total_frames))
 
+    def set_review_data(
+        self,
+        job_id: str,
+        *,
+        review_frame_path: Path | None,
+        review_width: int,
+        review_height: int,
+        selectable_faces: list[dict[str, int | str]],
+        review_video_width: int = 0,
+        review_video_height: int = 0,
+        review_video_fps: float = 0.0,
+        review_detections: list[dict[str, object]] | None = None,
+    ) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+
+            job.review_frame_path = review_frame_path
+            job.review_width = max(0, int(review_width))
+            job.review_height = max(0, int(review_height))
+            job.selectable_faces = selectable_faces
+            job.review_video_width = max(0, int(review_video_width))
+            job.review_video_height = max(0, int(review_video_height))
+            job.review_video_fps = max(0.0, float(review_video_fps))
+            job.review_detections = review_detections or []
+
     def mark_completed(self, job_id: str) -> None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -114,6 +149,8 @@ class JobService:
                 job.error = error
 
     def serialize_job(self, job: MediaJob) -> dict[str, object]:
+        has_review_frame = job.review_frame_path is not None and job.review_frame_path.exists()
+        has_review_detections = bool(job.review_detections)
         return {
             "jobId": job.job_id,
             "status": job.status,
@@ -127,6 +164,14 @@ class JobService:
             "error": job.error,
             "downloadUrl": f"/media/jobs/{job.job_id}/download" if job.status == "completed" else None,
             "eventsUrl": f"/media/jobs/{job.job_id}/events",
+            "reviewFrameUrl": f"/media/jobs/{job.job_id}/review-frame" if has_review_frame else None,
+            "reviewDetectionsUrl": f"/media/jobs/{job.job_id}/review-detections" if has_review_detections else None,
+            "reviewWidth": job.review_width,
+            "reviewHeight": job.review_height,
+            "videoWidth": job.review_video_width,
+            "videoHeight": job.review_video_height,
+            "videoFps": job.review_video_fps,
+            "selectableFaces": job.selectable_faces,
         }
 
 
