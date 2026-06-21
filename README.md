@@ -1,6 +1,6 @@
 # CensorMe
 
-CensorMe is a portfolio-grade face censoring app that detects faces in images and videos and applies blur, pixelation, or redaction before returning the processed media for download.
+CensorMe is a face censoring app that detects faces in images and videos and applies blur, pixelation, or redaction before returning the processed media for download.
 
 The project started as a single Tkinter script called FaceLock. It has been restructured into a clean monorepo with a FastAPI backend and a Next.js frontend so the processing logic can be tested, extended, and presented professionally.
 
@@ -67,7 +67,6 @@ npm install
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_API_URL` if your API is not running at `http://localhost:8000/api`.
 
 ## API Endpoints
 
@@ -77,8 +76,17 @@ Set `NEXT_PUBLIC_API_URL` if your API is not running at `http://localhost:8000/a
 - `GET /api/media/jobs/{jobId}` - check queued video status
 - `GET /api/media/jobs/{jobId}/download` - download the finished video
 
-## Future Improvements
+## Known Issues / To Be Fixed
 
-- Add the ability to remove boxes from certain faces
-- Add the ability to interact with the detector and preview the intensity
-- Add test coverage for service boundaries and API routes
+- The live preview review flow is still unstable in some cases.
+  - Video preview can behave inconsistently when rendering frames, audio, and detection boxes together.
+  - The canvas-based review overlay may not always stay perfectly synced with playback or seeking.
+  - Image live preview updates may still need refinement to better match the final processed output.
+  - This needs further testing with different video formats, resolutions, frame rates, and large batch uploads.
+
+Planned improvements:
+- Make the video preview renderer more stable and reliable.
+- Improve synchronization between playback time and displayed detection boxes.
+- Add better fallback behavior when the browser cannot render a video preview correctly.
+- Improve image preview accuracy so the live preview matches the final exported result more closely.
+- Add more tests around preview/review behavior for images, videos, and batch processing.

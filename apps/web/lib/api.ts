@@ -1,7 +1,33 @@
-import type { BatchResponse, MediaJobResponse } from "./job-types";
+import type { BatchResponse, MediaJobResponse, ReviewDetectionsResponse, SelectableFace } from "./job-types";
 import type { MediaKind, ProcessedMediaResult, ProcessingRequest } from "./types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+function normalizeApiBaseUrl(value: string | undefined): string {
+  const fallback = "http://127.0.0.1:8000/api";
+  const raw = value?.trim() || fallback;
+  return raw.replace(/\/+$/, "");
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
+
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network request failed.";
+    throw new Error(
+      `Could not connect to the CensorMe API at ${API_BASE_URL}. ` +
+        "Make sure the FastAPI server is running on port 8000, then refresh the page. " +
+        `Browser error: ${message}`
+    );
+  }
+}
+
+export function resolveApiUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+}
 
 function detectMediaKind(file: File): MediaKind {
   if (file.type.startsWith("video/")) {
@@ -71,7 +97,7 @@ function appendRequestOptions(formData: FormData, request: ProcessingRequest): v
 }
 
 async function pollMediaJob(jobId: string): Promise<MediaJobResponse> {
-  const response = await fetch(`${API_BASE_URL}/media/jobs/${jobId}`);
+  const response = await apiFetch(`${API_BASE_URL}/media/jobs/${jobId}`);
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
   }
@@ -99,12 +125,12 @@ async function waitForVideoJob(jobId: string): Promise<MediaJobResponse> {
 }
 
 export async function downloadMediaJob(job: MediaJobResponse): Promise<ProcessedMediaResult> {
-  if (!job.downloadUrl) {
+  const downloadUrl = resolveApiUrl(job.downloadUrl);
+  if (!downloadUrl) {
     throw new Error("Media job did not return a download URL.");
   }
 
-  const downloadPath = job.downloadUrl.startsWith("/") ? job.downloadUrl : `/${job.downloadUrl}`;
-  const response = await fetch(`${API_BASE_URL}${downloadPath}`);
+  const response = await apiFetch(downloadUrl);
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
   }
@@ -124,7 +150,7 @@ export async function processMediaFile(file: File, request: ProcessingRequest): 
   formData.append("file", file);
   appendRequestOptions(formData, request);
 
-  const response = await fetch(endpoint, {
+  const response = await apiFetch(endpoint, {
     method: "POST",
     body: formData,
   });
@@ -155,7 +181,7 @@ export async function submitMediaBatch(files: File[], request: ProcessingRequest
   files.forEach((file) => formData.append("files", file));
   appendRequestOptions(formData, request);
 
-  const response = await fetch(`${API_BASE_URL}/media/batch`, {
+  const response = await apiFetch(`${API_BASE_URL}/media/batch`, {
     method: "POST",
     body: formData,
   });
@@ -167,18 +193,51 @@ export async function submitMediaBatch(files: File[], request: ProcessingRequest
   return getJson<BatchResponse>(response);
 }
 
+export async function getReviewDetections(job: MediaJobResponse): Promise<ReviewDetectionsResponse | null> {
+  const reviewUrl = resolveApiUrl(job.reviewDetectionsUrl);
+  if (!reviewUrl) return null;
+
+  const response = await apiFetch(reviewUrl);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return getJson<ReviewDetectionsResponse>(response);
+}
+
+export async function reprocessMediaJob(
+  jobId: string,
+  request: ProcessingRequest,
+  excludedFaceIds: number[],
+): Promise<MediaJobResponse> {
+  const formData = new FormData();
+  appendRequestOptions(formData, request);
+  formData.append("excluded_face_ids", excludedFaceIds.join(","));
+
+  const response = await apiFetch(`${API_BASE_URL}/media/jobs/${jobId}/reprocess`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return getJson<MediaJobResponse>(response);
+}
+
 export function subscribeToMediaJob(
   job: MediaJobResponse,
   onUpdate: (job: MediaJobResponse) => void,
   onError: (error: Error) => void,
 ): () => void {
-  if (!job.eventsUrl) {
+  const eventsUrl = resolveApiUrl(job.eventsUrl);
+  if (!eventsUrl) {
     onError(new Error("Media job did not return a progress stream URL."));
     return () => undefined;
   }
 
-  const eventsPath = job.eventsUrl.startsWith("/") ? job.eventsUrl : `/${job.eventsUrl}`;
-  const source = new EventSource(`${API_BASE_URL}${eventsPath}`);
+  const source = new EventSource(eventsUrl);
 
   source.onmessage = (event) => {
     const nextJob = JSON.parse(event.data) as MediaJobResponse;
@@ -191,8 +250,62 @@ export function subscribeToMediaJob(
 
   source.onerror = () => {
     source.close();
-    onError(new Error("Lost connection to the progress stream."));
+    onError(new Error(`Lost connection to the progress stream at ${API_BASE_URL}. Make sure the FastAPI server is still running.`));
   };
 
   return () => source.close();
 }
+
+export interface FaceBox {
+  id?: number;
+  label?: string | null;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface DetectResponse {
+  width: number;
+  height: number;
+  faces: FaceBox[];
+}
+
+export async function detectFaces(
+  file: File,
+  options: Pick<ProcessingRequest, "filterMode" | "detectorModel" | "scoreThreshold" | "nmsThreshold" | "topK" | "useLandmarkFilter" | "minFacePixels">
+): Promise<DetectResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("filter_mode", options.filterMode);
+  formData.append("detector_model", options.detectorModel);
+  formData.append("score_threshold", String(options.scoreThreshold));
+  formData.append("nms_threshold", String(options.nmsThreshold));
+  formData.append("top_k", String(options.topK));
+  formData.append("use_landmark_filter", String(options.useLandmarkFilter));
+  formData.append("min_face_pixels", String(options.minFacePixels));
+
+  const response = await apiFetch(`${API_BASE_URL}/media/detect`, { method: "POST", body: formData });
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DetectResponse>;
+}
+
+export async function processImageSelective(
+  file: File,
+  request: ProcessingRequest,
+  excludedIndices: number[]
+): Promise<ProcessedMediaResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  appendRequestOptions(formData, request);
+  formData.append("excluded_indices", excludedIndices.join(","));
+
+  const response = await apiFetch(`${API_BASE_URL}/media/image/selective`, { method: "POST", body: formData });
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+
+  const blob = await response.blob();
+  const filename = extractFilename(response, `processed-${file.name}`);
+  return { blob, filename };
+}
+
+export type { SelectableFace };

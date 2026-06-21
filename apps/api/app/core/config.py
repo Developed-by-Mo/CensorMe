@@ -28,8 +28,17 @@ class Settings:
     cors_origins: tuple[str, ...] = field(
         default_factory=lambda: _parse_csv_env(
             os.getenv("CENSOR_ME_CORS_ORIGINS"),
-            ("http://localhost:3000",)
+            (
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
+            ),
         )
+    )
+    cors_origin_regex: str | None = os.getenv(
+        "CENSOR_ME_CORS_ORIGIN_REGEX",
+        r"^https?://(localhost|127\.0\.0\.1):\d+$",
     )
     model_path: Path = PROJECT_ROOT / "face_detection_yunet_2023mar.onnx"
     backup_model_path: Path = PROJECT_ROOT / "apps" / "api" / "app" / "assets" / "face_detection_yunet_2023mar.onnx"
